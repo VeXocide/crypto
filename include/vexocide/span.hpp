@@ -29,16 +29,16 @@ template <class ElementType, ptrdiff_t Extent = dynamic_extent> class span;
 
 namespace detail {
 
-template <class Span> class span_iterator {
+template <class ElementType, ptrdiff_t Extent> class span_iterator {
 public:
   using iterator_category = std::random_access_iterator_tag;
-  using value_type = typename Span::element_type;
-  using difference_type = typename Span::difference_type;
-  using pointer = typename Span::pointer;
-  using reference = typename Span::reference;
+  using value_type = typename span<ElementType, Extent>::element_type;
+  using difference_type = typename span<ElementType, Extent>::difference_type;
+  using pointer = typename span<ElementType, Extent>::pointer;
+  using reference = typename span<ElementType, Extent>::reference;
 
   reference operator*() const noexcept {
-    if (data_ < span_->data() || data_ >= span_->data() + span_->size()) {
+    if (data_ < span_.data() || data_ >= span_.data() + span_.size()) {
       std::terminate();
     }
 
@@ -46,7 +46,7 @@ public:
   }
 
   pointer operator->() const noexcept {
-    if (data_ < span_->data() || data_ >= span_->data() + span_->size()) {
+    if (data_ < span_.data() || data_ >= span_.data() + span_.size()) {
       std::terminate();
     }
 
@@ -59,7 +59,7 @@ public:
   }
 
   span_iterator operator++(int) noexcept {
-    span_iterator<Span> t = *this;
+    span_iterator<ElementType, Extent> t = *this;
     ++(*this);
     return t;
   }
@@ -70,7 +70,7 @@ public:
   }
 
   span_iterator operator--(int) noexcept {
-    span_iterator<Span> t = *this;
+    span_iterator<ElementType, Extent> t = *this;
     --(*this);
     return t;
   }
@@ -86,23 +86,23 @@ public:
   }
 
   span_iterator operator+(difference_type n) const noexcept {
-    span_iterator<Span> t = *this;
+    span_iterator<ElementType, Extent> t = *this;
     return t += n;
   }
 
   span_iterator operator-(difference_type n) const noexcept {
-    span_iterator<Span> t = *this;
+    span_iterator<ElementType, Extent> t = *this;
     return t -= n;
   }
 
-  friend span_iterator<Span> operator+(difference_type n,
-                                       const span_iterator<Span> &i) noexcept {
+  friend span_iterator operator+(difference_type n,
+                                 const span_iterator &i) noexcept {
     return i + n;
   }
 
   friend difference_type operator-(const span_iterator &l,
                                    const span_iterator &r) noexcept {
-    if (l.span_ != r.span_) {
+    if (l.span_.data() != r.span_.data() || l.span_.size() != r.span_.size()) {
       std::terminate();
     }
 
@@ -115,7 +115,7 @@ public:
 
   friend bool operator==(const span_iterator &l,
                          const span_iterator &r) noexcept {
-    if (l.span_ != r.span_) {
+    if (l.span_.data() != r.span_.data() || l.span_.size() != r.span_.size()) {
       std::terminate();
     }
 
@@ -129,7 +129,7 @@ public:
 
   friend bool operator<(const span_iterator &l,
                         const span_iterator &r) noexcept {
-    if (l.span_ != r.span_) {
+    if (l.span_.data() != r.span_.data() || l.span_.size() != r.span_.size()) {
       std::terminate();
     }
 
@@ -151,13 +151,19 @@ public:
     return !(l < r);
   }
 
+  operator span_iterator<std::add_const_t<ElementType>, Extent>() {
+    return {data_, span_};
+  }
+
 private:
-  span_iterator(pointer data, const Span *span) : data_(data), span_(span) {}
+  span_iterator(pointer data, span<std::add_const_t<ElementType>, Extent> span)
+      : data_(data), span_(std::move(span)) {}
 
   pointer data_;
-  const Span *span_;
+  span<std::add_const_t<ElementType>, Extent> span_;
 
-  template <class ElementType, ptrdiff_t Extent> friend class vexocide::span;
+  friend class span_iterator<std::remove_const_t<ElementType>, Extent>;
+  friend class vexocide::span<std::remove_const_t<ElementType>, Extent>;
 };
 
 template <typename T> struct is_span_or_array_impl : std::false_type {};
@@ -183,9 +189,9 @@ public:
   using difference_type = std::ptrdiff_t;
   using pointer = std::add_pointer_t<element_type>;
   using reference = std::add_lvalue_reference_t<element_type>;
-  using iterator = detail::span_iterator<span<ElementType, Extent>>;
+  using iterator = detail::span_iterator<ElementType, Extent>;
   using const_iterator =
-      detail::span_iterator<span<std::add_const_t<element_type>, Extent>>;
+      detail::span_iterator<std::add_const_t<element_type>, Extent>;
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -406,23 +412,13 @@ public:
   constexpr pointer data() const noexcept { return data_; }
 
   // [span.iter], span iterator support
-  iterator begin() const noexcept { return {data(), this}; }
+  iterator begin() const noexcept { return {data(), *this}; }
 
-  iterator end() const noexcept { return {data() + size(), this}; }
+  iterator end() const noexcept { return {data() + size(), *this}; }
 
-  const_iterator cbegin() const noexcept {
-    return {
-        data(),
-        reinterpret_cast<const span<std::add_const_t<element_type>, Extent> *>(
-            this)};
-  }
+  const_iterator cbegin() const noexcept { return {data(), *this}; }
 
-  const_iterator cend() const noexcept {
-    return {
-        data() + size(),
-        reinterpret_cast<const span<std::add_const_t<element_type>, Extent> *>(
-            this)};
-  }
+  const_iterator cend() const noexcept { return {data() + size(), *this}; }
 
   reverse_iterator rbegin() const noexcept { return reverse_iterator{end()}; }
 
