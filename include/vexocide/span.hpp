@@ -17,8 +17,7 @@
 #include <iterator>
 #include <memory>
 #include <type_traits>
-
-// __has_include experimental/type_traits
+#include <utility>
 
 namespace vexocide {
 
@@ -210,14 +209,12 @@ public:
     }
   }
 
-  template <typename Pointer, typename = std::enable_if_t<
-                                  std::is_convertible<Pointer, pointer>::value>>
-  constexpr span(pointer firstElem, Pointer lastElem)
-      : data_(firstElem),
-        size_(std::distance(firstElem, static_cast<pointer>(lastElem))) {
-    if (std::distance(firstElem, static_cast<pointer>(lastElem)) < 0 ||
+  // FIXME: ambigious with span<ElementType, Extent>{pointer, 0}
+  constexpr span(pointer firstElem, pointer lastElem)
+      : data_(firstElem), size_(std::distance(firstElem, lastElem)) {
+    if (std::distance(firstElem, lastElem) < 0 ||
         (extent != dynamic_extent &&
-         std::distance(firstElem, static_cast<pointer>(lastElem)) != extent)) {
+         std::distance(firstElem, lastElem) != extent)) {
       std::terminate();
     }
   }
@@ -237,16 +234,9 @@ public:
                   "program is ill-formed");
   }
 
+  // FIXME: overloads deviate from P0122R3
   template <size_t N, typename = std::enable_if_t<
                           N == N && std::is_const<element_type>::value>>
-  constexpr span(std::array<std::remove_const_t<element_type>, N> &arr)
-      : data_(std::addressof(arr[0])), size_(N) {
-    static_assert(extent == dynamic_extent || N == extent,
-                  "If extent != dynamic_extent && N != extent, then the "
-                  "program is ill-formed");
-  }
-
-  template <size_t N>
   constexpr span(const std::array<std::remove_const_t<element_type>, N> &arr)
       : data_(std::addressof(arr[0])), size_(N) {
     static_assert(extent == dynamic_extent || N == extent,
@@ -434,13 +424,17 @@ public:
             this)};
   }
 
-  reverse_iterator rbegin() const noexcept { return {end()}; }
+  reverse_iterator rbegin() const noexcept { return reverse_iterator{end()}; }
 
-  reverse_iterator rend() const noexcept { return {begin()}; }
+  reverse_iterator rend() const noexcept { return reverse_iterator{begin()}; }
 
-  const_reverse_iterator crbegin() const noexcept { return {cend()}; }
+  const_reverse_iterator crbegin() const noexcept {
+    return const_reverse_iterator{cend()};
+  }
 
-  const_reverse_iterator crend() const noexcept { return {cbegin()}; }
+  const_reverse_iterator crend() const noexcept {
+    return const_reverse_iterator{cbegin()};
+  }
 
 private:
   pointer data_;    // exposition only
