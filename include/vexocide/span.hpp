@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <exception>
 #include <iterator>
@@ -38,17 +39,13 @@ public:
   using reference = typename span<ElementType, Extent>::reference;
 
   reference operator*() const noexcept {
-    if (data_ < span_.data() || data_ >= span_.data() + span_.size()) {
-      std::terminate();
-    }
+    assert(data_ >= span_.data() && data_ < span_.data() + span_.size());
 
     return *data_;
   }
 
   pointer operator->() const noexcept {
-    if (data_ < span_.data() || data_ >= span_.data() + span_.size()) {
-      std::terminate();
-    }
+    assert(data_ >= span_.data() && data_ < span_.data() + span_.size());
 
     return data_;
   }
@@ -102,9 +99,8 @@ public:
 
   friend difference_type operator-(const span_iterator &l,
                                    const span_iterator &r) noexcept {
-    if (l.span_.data() != r.span_.data() || l.span_.size() != r.span_.size()) {
-      std::terminate();
-    }
+    assert(l.span_.data() == r.span_.data() &&
+           l.span_.size() == r.span_.size());
 
     return l.data_ - r.data_;
   }
@@ -115,9 +111,8 @@ public:
 
   friend bool operator==(const span_iterator &l,
                          const span_iterator &r) noexcept {
-    if (l.span_.data() != r.span_.data() || l.span_.size() != r.span_.size()) {
-      std::terminate();
-    }
+    assert(l.span_.data() == r.span_.data() &&
+           l.span_.size() == r.span_.size());
 
     return l.data_ == r.data_;
   }
@@ -129,9 +124,8 @@ public:
 
   friend bool operator<(const span_iterator &l,
                         const span_iterator &r) noexcept {
-    if (l.span_.data() != r.span_.data() || l.span_.size() != r.span_.size()) {
-      std::terminate();
-    }
+    assert(l.span_.data() == r.span_.data() &&
+           l.span_.size() == r.span_.size());
 
     return l.data_ < r.data_;
   }
@@ -189,9 +183,14 @@ public:
   using difference_type = std::ptrdiff_t;
   using pointer = std::add_pointer_t<element_type>;
   using reference = std::add_lvalue_reference_t<element_type>;
+#ifdef NDEBUG
+  using iterator = std::add_pointer_t<element_type>;
+  using const_iterator = std::add_pointer_t<std::add_const_t<element_type>>;
+#else
   using iterator = detail::span_iterator<ElementType, Extent>;
   using const_iterator =
       detail::span_iterator<std::add_const_t<element_type>, Extent>;
+#endif
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -209,20 +208,16 @@ public:
   }
 
   constexpr span(pointer ptr, index_type count) : data_(ptr), size_(count) {
-    if ((ptr == nullptr ? count != 0 : count < 0) ||
-        (extent != dynamic_extent && count != extent)) {
-      std::terminate();
-    }
+    assert((ptr == nullptr ? count == 0 : count >= 0) &&
+           (extent == dynamic_extent || count == extent));
   }
 
   // FIXME: ambigious with span<ElementType, Extent>{pointer, 0}
   constexpr span(pointer firstElem, pointer lastElem)
       : data_(firstElem), size_(std::distance(firstElem, lastElem)) {
-    if (std::distance(firstElem, lastElem) < 0 ||
-        (extent != dynamic_extent &&
-         std::distance(firstElem, lastElem) != extent)) {
-      std::terminate();
-    }
+    assert(std::distance(firstElem, lastElem) >= 0 &&
+           (extent == dynamic_extent ||
+            std::distance(firstElem, lastElem) == extent));
   }
 
   template <size_t N>
@@ -260,10 +255,8 @@ public:
                              typename Container::size_type>::value>>
   constexpr span(Container &cont)
       : data_(std::addressof(cont[0])), size_(cont.size()) {
-    if (extent != dynamic_extent &&
-        static_cast<index_type>(cont.size()) != extent) {
-      std::terminate();
-    }
+    assert(extent == dynamic_extent ||
+           static_cast<index_type>(cont.size()) == extent);
   }
 
   template <class Container,
@@ -277,10 +270,8 @@ public:
                 std::is_const<element_type>::value>>
   constexpr span(const Container &cont)
       : data_(std::addressof(cont[0])), size_(cont.size()) {
-    if (extent != dynamic_extent &&
-        static_cast<index_type>(cont.size()) != extent) {
-      std::terminate();
-    }
+    assert(extent == dynamic_extent ||
+           static_cast<index_type>(cont.size()) == extent);
   }
 
   constexpr span(const span &other) noexcept = default;
@@ -294,9 +285,7 @@ public:
                  Extent == OtherExtent)>>
   constexpr span(const span<OtherElementType, OtherExtent> &other)
       : data_(reinterpret_cast<pointer>(other.data())), size_(other.size()) {
-    if (extent != dynamic_extent && other.size() != extent) {
-      std::terminate();
-    }
+    assert(extent == dynamic_extent || other.size() == extent);
   }
 
   template <class OtherElementType, ptrdiff_t OtherExtent,
@@ -306,9 +295,7 @@ public:
                  Extent == OtherExtent)>>
   constexpr span(span<OtherElementType, OtherExtent> &&other)
       : data_(reinterpret_cast<pointer>(other.data())), size_(other.size()) {
-    if (extent != dynamic_extent && other.size() != extent) {
-      std::terminate();
-    }
+    assert(extent == dynamic_extent || other.size() == extent);
   }
 
   ~span() noexcept = default;
@@ -320,20 +307,14 @@ public:
   // [span.sub], span subviews
   template <ptrdiff_t Count> constexpr span<element_type, Count> first() const {
     static_assert(Count >= 0, "Count >= 0");
-
-    if (Count > size()) {
-      std::terminate();
-    }
+    assert(Count <= size());
 
     return {data(), Count};
   }
 
   template <ptrdiff_t Count> constexpr span<element_type, Count> last() const {
     static_assert(Count >= 0, "Count >= 0");
-
-    if (Count > size()) {
-      std::terminate();
-    }
+    assert(Count <= size());
 
     return {data() + (size() - Count), Count};
   }
@@ -343,38 +324,30 @@ public:
     static_assert(Offset >= 0 && (Count == dynamic_extent || Count >= 0),
                   "Offset >= 0 && (Count == dynamic_extent || Count >= 0)");
 
-    // FIXME: Offset >= size() per P0122R3
-    if (Offset > size() ||
-        (Count != dynamic_extent && Offset + Count > size())) {
-      std::terminate();
-    }
+    // FIXME: Offset < size() per P0122R3
+    assert(Offset <= size() &&
+           (Count == dynamic_extent || Offset + Count <= size()));
 
     return {data() + Offset, Count == dynamic_extent ? size() - Offset : Count};
   }
 
   constexpr span<element_type, dynamic_extent> first(index_type count) const {
-    if (count < 0 || count > size()) {
-      std::terminate();
-    }
+    assert(count >= 0 && count <= size());
 
     return {data(), count};
   }
 
   constexpr span<element_type, dynamic_extent> last(index_type count) const {
-    if (count < 0 || count > size()) {
-      std::terminate();
-    }
+    assert(count >= 0 && count <= size());
 
     return {data() + (size() - count), count};
   }
 
   constexpr span<element_type, dynamic_extent>
   subspan(index_type offset, index_type count = dynamic_extent) const {
-    // FIXME: offset >= size() per P0122R3
-    if (offset < 0 || offset > size() ||
-        (count != dynamic_extent && count < 0) || offset + count > size()) {
-      std::terminate();
-    }
+    // FIXME: offset < size() per P0122R3
+    assert(offset >= 0 && offset <= size() &&
+           (count == dynamic_extent || count >= 0) && offset + count <= size());
 
     return {data() + offset, count == dynamic_extent ? size() - offset : count};
   }
@@ -394,17 +367,13 @@ public:
 
   // [span.elem], span element access
   constexpr reference operator[](index_type idx) const {
-    if (idx < 0 || idx >= size()) {
-      std::terminate();
-    }
+    assert(idx >= 0 && idx < size());
 
     return *(data() + idx);
   }
 
   constexpr reference operator()(index_type idx) const {
-    if (idx < 0 || idx >= size()) {
-      std::terminate();
-    }
+    assert(idx >= 0 && idx < size());
 
     return *(data() + idx);
   }
@@ -412,13 +381,37 @@ public:
   constexpr pointer data() const noexcept { return data_; }
 
   // [span.iter], span iterator support
-  iterator begin() const noexcept { return {data(), *this}; }
+  iterator begin() const noexcept {
+#ifdef NDEBUG
+    return data();
+#else
+    return {data(), *this};
+#endif
+  }
 
-  iterator end() const noexcept { return {data() + size(), *this}; }
+  iterator end() const noexcept {
+#ifdef NDEBUG
+    return data() + size();
+#else
+    return {data() + size(), *this};
+#endif
+  }
 
-  const_iterator cbegin() const noexcept { return {data(), *this}; }
+  const_iterator cbegin() const noexcept {
+#ifdef NDEBUG
+    return data();
+#else
+    return {data(), *this};
+#endif
+  }
 
-  const_iterator cend() const noexcept { return {data() + size(), *this}; }
+  const_iterator cend() const noexcept {
+#ifdef NDEBUG
+    return data() + size();
+#else
+    return {data() + size(), *this};
+#endif
+  }
 
   reverse_iterator rbegin() const noexcept { return reverse_iterator{end()}; }
 
