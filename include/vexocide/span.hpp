@@ -38,14 +38,18 @@ public:
   using pointer = typename span<ElementType, Extent>::pointer;
   using reference = typename span<ElementType, Extent>::reference;
 
+  span_iterator() noexcept : data_(nullptr), span_({}) {}
+
   reference operator*() const noexcept {
-    assert(data_ >= span_.data() && data_ < span_.data() + span_.size());
+    assert(data_ != nullptr && data_ >= span_.data() &&
+           data_ < span_.data() + span_.size());
 
     return *data_;
   }
 
   pointer operator->() const noexcept {
-    assert(data_ >= span_.data() && data_ < span_.data() + span_.size());
+    assert(data_ != nullptr && data_ >= span_.data() &&
+           data_ < span_.data() + span_.size());
 
     return data_;
   }
@@ -145,7 +149,8 @@ public:
     return !(l < r);
   }
 
-  operator span_iterator<std::add_const_t<ElementType>, Extent>() {
+  operator span_iterator<std::add_const_t<ElementType>, Extent>() const
+      noexcept {
     return {data_, span_};
   }
 
@@ -157,6 +162,7 @@ private:
   span<std::add_const_t<ElementType>, Extent> span_;
 
   friend class span_iterator<std::remove_const_t<ElementType>, Extent>;
+  friend class vexocide::span<ElementType, Extent>;
   friend class vexocide::span<std::remove_const_t<ElementType>, Extent>;
 };
 
@@ -174,7 +180,7 @@ struct is_span_or_array : is_span_or_array_impl<std::remove_cv_t<T>> {};
 }
 
 // A view over a contiguous, single-dimension sequence of objects
-template <class ElementType, ptrdiff_t Extent /* = dynamic_extent */>
+template <class ElementType, std::ptrdiff_t Extent /* = dynamic_extent */>
 class span {
 public:
   // constants and types
@@ -469,20 +475,24 @@ constexpr bool operator>=(const span<ElementType, Extent> &l,
 
 // [span.objectrep], views of object representation
 template <class ElementType, ptrdiff_t Extent>
-span<const byte, ((Extent == dynamic_extent) ? dynamic_extent
-                                             : (sizeof(ElementType) * Extent))>
+span<const byte,
+     ((Extent == dynamic_extent)
+          ? dynamic_extent
+          : static_cast<std::ptrdiff_t>(sizeof(ElementType) * Extent))>
 as_bytes(span<ElementType, Extent> s) noexcept {
   return {reinterpret_cast<const byte *>(s.data()),
-          sizeof(ElementType) * s.size()};
+          static_cast<std::ptrdiff_t>(sizeof(ElementType) * s.size())};
 }
 
 template <class ElementType, ptrdiff_t Extent,
           typename = std::enable_if_t<!std::is_const<
               typename span<ElementType, Extent>::element_type>::value>>
-span<byte, ((Extent == dynamic_extent) ? dynamic_extent
-                                       : (sizeof(ElementType) * Extent))>
+span<byte, ((Extent == dynamic_extent)
+                ? dynamic_extent
+                : static_cast<std::ptrdiff_t>(sizeof(ElementType) * Extent))>
 as_writeable_bytes(span<ElementType, Extent> s) noexcept {
-  return {reinterpret_cast<byte>(s.data()), sizeof(ElementType) * s.size()};
+  return {reinterpret_cast<byte *>(s.data()),
+          static_cast<std::ptrdiff_t>(sizeof(ElementType) * s.size())};
 }
 
 }
